@@ -351,9 +351,9 @@ class FluxUltra11(FluxBase):
     INPUT_SPEC = {
         "required": {
             "prompt": ("STRING", {"multiline": True}),
-            "image_prompt": ("IMAGE",),
         },
         "optional": {
+            "image_prompt": ("IMAGE",),
             "aspect_ratio": ("STRING", {"default": "1:1"}),
             "raw": (
                 "BOOLEAN",
