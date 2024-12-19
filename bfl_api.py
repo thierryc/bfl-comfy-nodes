@@ -1,12 +1,13 @@
-import requests
-from requests.models import PreparedRequest
-from PIL import Image
-import numpy as np
-import torch
-from torchvision.transforms import ToPILImage
-from io import BytesIO
 import os
 import time
+from io import BytesIO
+
+import numpy as np
+import requests
+import torch
+from PIL import Image
+from requests.models import PreparedRequest
+import base64
 
 ROOT_API = "https://api.bfl.ml/"
 API_KEY = os.environ.get("BFL_API_KEY")
@@ -19,22 +20,14 @@ def get_api_key():
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
     key_file_path = os.path.join(dir_path, "bfl_api_key.txt")
-    error_message = (
-        "API Key is required to use the BFL API. "
-        f"Please set the BFL_API_KEY environment variable to your API key "
-        f"or place it in {key_file_path}."
-    )
 
-    try:
+    if os.path.exists(key_file_path):
         with open(key_file_path, "r") as f:
             API_KEY = f.read().strip()
-        if not API_KEY:
-            raise ValueError(error_message)
-    except (FileNotFoundError, ValueError) as e:
-        print(f"\n\n***{error_message}***\n\n")
-        raise
+            if API_KEY:
+                return API_KEY
 
-    return API_KEY
+    return None
 
 
 class FluxBase:
@@ -87,6 +80,8 @@ class FluxBase:
 
     def _poll_for_result(self, id, headers):
         timeout, start_time = 240, time.time()
+        retries = 0
+        max_retries = 0
         while True:
             response = requests.get(
                 f"{ROOT_API}{self.POLL_ENDPOINT}", params={"id": id}, headers=headers
@@ -101,6 +96,14 @@ class FluxBase:
                     raise Exception(f"BFL API Message: {result['status']}")
                 elif result["status"] == "Error":
                     raise Exception(f"BFL API Error: {result}")
+            elif response.status_code == 404:
+                if retries < max_retries:
+                    retries += 1
+                    time.sleep(5)
+                    continue
+                raise Exception(
+                    f"BFL API Error: Task not found after {max_retries} retries"
+                )
             elif response.status_code == 202:
                 time.sleep(10)
             elif time.time() - start_time > timeout:
@@ -112,6 +115,25 @@ class FluxBase:
         image = Image.open(BytesIO(response.content)).convert("RGBA")
         image_array = np.array(image).astype(np.float32) / 255.0
         return (torch.from_numpy(image_array)[None,],)
+
+    def _convert_image_to_base64(self, image):
+        if isinstance(image, torch.Tensor):
+            image = Image.fromarray((image[0].cpu().numpy() * 255).astype(np.uint8))
+            buffered = BytesIO()
+            image.save(buffered, format="PNG")
+            return base64.b64encode(buffered.getvalue()).decode()
+        return image
+
+    def _convert_mask_to_base64(self, mask):
+        if isinstance(mask, torch.Tensor):
+            mask_np = mask.cpu().numpy()
+            if len(mask_np.shape) == 3:
+                mask_np = mask_np[0]
+            mask = Image.fromarray((mask_np * 255).astype(np.uint8), mode="L")
+            buffered = BytesIO()
+            mask.save(buffered, format="PNG")
+            return base64.b64encode(buffered.getvalue()).decode()
+        return mask
 
 
 class FluxPro(FluxBase):
@@ -141,8 +163,16 @@ class FluxPro(FluxBase):
             ),
             "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
             "api_key_override": ("STRING", {"multiline": False}),
+            "image_prompt": ("IMAGE",),
         },
     }
+
+    def call(self, *args, **kwargs):
+        if "image_prompt" in kwargs and kwargs["image_prompt"] is not None:
+            kwargs["image_prompt"] = self._convert_image_to_base64(
+                kwargs["image_prompt"]
+            )
+        return super().call(*args, **kwargs)
 
 
 class FluxDev(FluxBase):
@@ -172,8 +202,16 @@ class FluxDev(FluxBase):
             ),
             "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
             "api_key_override": ("STRING", {"multiline": False}),
+            "image_prompt": ("IMAGE",),
         },
     }
+
+    def call(self, *args, **kwargs):
+        if "image_prompt" in kwargs and kwargs["image_prompt"] is not None:
+            kwargs["image_prompt"] = self._convert_image_to_base64(
+                kwargs["image_prompt"]
+            )
+        return super().call(*args, **kwargs)
 
 
 class FluxPro11(FluxBase):
@@ -202,12 +240,139 @@ class FluxPro11(FluxBase):
             ),
             "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
             "api_key_override": ("STRING", {"multiline": False}),
+            "image_prompt": ("IMAGE",),
         },
     }
 
+    def call(self, *args, **kwargs):
+        if "image_prompt" in kwargs and kwargs["image_prompt"] is not None:
+            kwargs["image_prompt"] = self._convert_image_to_base64(
+                kwargs["image_prompt"]
+            )
+        return super().call(*args, **kwargs)
 
-NODE_CLASS_MAPPINGS = {
-    "FLUX .1 [pro]": FluxPro,
-    "FLUX .1 [dev]": FluxDev,
-    "FLUX 1.1 [pro]": FluxPro11,
-}
+
+class FluxProFill(FluxBase):
+    API_ENDPOINT = "v1/flux-pro-1.0-fill"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "image/*"
+    INPUT_SPEC = {
+        "required": {
+            "image": ("IMAGE",),
+            "prompt": ("STRING", {"multiline": True}),
+        },
+        "optional": {
+            "mask": ("MASK",),
+            "seed": ("INT", {"default": 0, "min": 0, "max": 4294967294}),
+            "guidance": (
+                "FLOAT",
+                {"default": 60.0, "min": 1.5, "max": 100, "step": 0.1},
+            ),
+            "steps": ("INT", {"default": 50, "min": 15, "max": 50}),
+            "prompt_upsampling": ("BOOLEAN", {"default": False}),
+            "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
+            "api_key_override": ("STRING", {"multiline": False}),
+        },
+    }
+
+    def call(self, *args, **kwargs):
+        if "image" in kwargs:
+            kwargs["image"] = self._convert_image_to_base64(kwargs["image"])
+        if "mask" in kwargs and kwargs["mask"] is not None:
+            kwargs["mask"] = self._convert_mask_to_base64(kwargs["mask"])
+        return super().call(*args, **kwargs)
+
+
+class FluxCanny(FluxBase):
+    API_ENDPOINT = "v1/flux-pro-1.0-canny"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "image/*"
+    INPUT_SPEC = {
+        "required": {
+            "prompt": ("STRING", {"multiline": True}),
+            "control_image": ("IMAGE",),
+        },
+        "optional": {
+            "seed": ("INT", {"default": 0, "min": 0, "max": 4294967294}),
+            "guidance": (
+                "FLOAT",
+                {"default": 30.0, "min": 1.0, "max": 100, "step": 0.1},
+            ),
+            "steps": ("INT", {"default": 50, "min": 15, "max": 50}),
+            "prompt_upsampling": ("BOOLEAN", {"default": False}),
+            "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
+            "api_key_override": ("STRING", {"multiline": False}),
+        },
+    }
+
+    def call(self, *args, **kwargs):
+        if "control_image" in kwargs:
+            kwargs["control_image"] = self._convert_image_to_base64(
+                kwargs["control_image"]
+            )
+        return super().call(*args, **kwargs)
+
+
+class FluxDepth(FluxBase):
+    API_ENDPOINT = "v1/flux-pro-1.0-depth"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "image/*"
+    INPUT_SPEC = {
+        "required": {
+            "prompt": ("STRING", {"multiline": True}),
+            "control_image": ("IMAGE",),
+        },
+        "optional": {
+            "seed": ("INT", {"default": 0, "min": 0, "max": 4294967294}),
+            "guidance": (
+                "FLOAT",
+                {"default": 15.0, "min": 1.0, "max": 100, "step": 0.1},
+            ),
+            "steps": ("INT", {"default": 50, "min": 15, "max": 50}),
+            "prompt_upsampling": ("BOOLEAN", {"default": False}),
+            "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
+            "api_key_override": ("STRING", {"multiline": False}),
+        },
+    }
+
+    def call(self, *args, **kwargs):
+        if "control_image" in kwargs:
+            kwargs["control_image"] = self._convert_image_to_base64(
+                kwargs["control_image"]
+            )
+        return super().call(*args, **kwargs)
+
+
+class FluxUltra11(FluxBase):
+    API_ENDPOINT = "v1/flux-pro-1.1-ultra"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "image/*"
+
+    INPUT_SPEC = {
+        "required": {
+            "prompt": ("STRING", {"multiline": True}),
+            "image_prompt": ("IMAGE",),
+        },
+        "optional": {
+            "aspect_ratio": ("STRING", {"default": "1:1"}),
+            "raw": (
+                "BOOLEAN",
+                {"default": False, "label_on": "True", "label_off": "False"},
+            ),
+            "safety_tolerance": ("INT", {"default": 5, "min": 1, "max": 5, "step": 1}),
+            "seed": ("INT", {"default": 0, "min": 0, "max": 4294967294}),
+            "image_prompt_strength": (
+                "FLOAT",
+                {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01},
+            ),
+            "output_format": ("STRING", {"default": "png"}),
+            "api_key_override": ("STRING", {"multiline": False}),
+        },
+    }
+
+    def call(self, *args, **kwargs):
+        if "image_prompt" in kwargs and kwargs["image_prompt"] is not None:
+            kwargs["image_prompt"] = self._convert_image_to_base64(
+                kwargs["image_prompt"]
+            )
+        return super().call(*args, **kwargs)
