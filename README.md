@@ -6,7 +6,7 @@ This setup allows you to integrate and access BFL's API directly from within you
 
 ### Step 1: Add `bfl_api.py` to Your ComfyUI Environment
 - Clone this repo in your `ComfyUI/custom_nodes` directory.
-  
+
 ### Step 2: Set Up Your BFL API Key
 - To authenticate your requests, you need to provide your **BFL API key** from the [Black Forest Labs API](https://api.bfl.ml). 
   
@@ -28,7 +28,7 @@ This setup allows you to integrate and access BFL's API directly from within you
 - Once ComfyUI has restarted, you can now insert a **FLUX API Node** such as **FLUX 1.1 [pro]** into your workflow.
 - To get started quickly, drag and drop the following node image into your workflow:
 
-![ComfyUI_temp_tyitb_00002_](https://github.com/user-attachments/assets/44ba3add-6252-43ed-b7d7-68ef93f85ddd)
+  ![ComfyUI_temp_qkhdn_00005_](https://github.com/user-attachments/assets/ad9ff10a-ad71-44f3-aa2b-24d18e2a23a9)
 
 ### Step 5: Enjoy the nodes
 
