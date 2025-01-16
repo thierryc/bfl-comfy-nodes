@@ -376,3 +376,174 @@ class FluxUltra11(FluxBase):
                 kwargs["image_prompt"]
             )
         return super().call(*args, **kwargs)
+
+
+class FluxProFinetune(FluxBase):
+    API_ENDPOINT = "v1/flux-pro-finetuned"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "image/*"
+    CATEGORY = "Flux Finetuned"
+    INPUT_SPEC = {
+        "required": {
+            "prompt": ("STRING", {"multiline": True}),
+            "finetune_id": ("STRING", {"multiline": False}),
+        },
+        "optional": {
+            "finetune_strength": ("FLOAT", {"default": 1.1, "min": 0.0, "max": 2.0}),
+            "seed": ("INT", {"default": 0, "min": 0, "max": 4294967294}),
+            "guidance": ("FLOAT", {"default": 2.5, "min": 1.5, "max": 5.0}),
+            "steps": ("INT", {"default": 40, "min": 1, "max": 50}),
+            "prompt_upsampling": ("BOOLEAN", {"default": False}),
+            "width": ("INT", {"default": 1024, "min": 256, "max": 1440, "step": 32}),
+            "height": ("INT", {"default": 768, "min": 256, "max": 1440, "step": 32}),
+            "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
+            "output_format": ("STRING", {"default": "jpeg"}),
+            "image_prompt": ("IMAGE",),
+            "image_prompt_strength": (
+                "FLOAT",
+                {"default": 0.1, "min": 0.0, "max": 1.0},
+            ),
+        },
+    }
+
+    def call(self, *args, **kwargs):
+        if "image_prompt" in kwargs and kwargs["image_prompt"] is not None:
+            kwargs["image_prompt"] = self._convert_image_to_base64(
+                kwargs["image_prompt"]
+            )
+        return super().call(*args, **kwargs)
+
+
+class FluxProCannyFinetune(FluxBase):
+    API_ENDPOINT = "v1/flux-pro-1.0-canny-finetuned"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "image/*"
+    CATEGORY = "Flux Finetuned"
+    INPUT_SPEC = {
+        "required": {
+            "prompt": ("STRING", {"multiline": True}),
+            "control_image": ("IMAGE",),
+            "finetune_id": ("STRING", {"multiline": False}),
+        },
+        "optional": {
+            "finetune_strength": ("FLOAT", {"default": 1.1, "min": 0.0, "max": 2.0}),
+            "seed": ("INT", {"default": 0, "min": 0, "max": 4294967294}),
+            "guidance": (
+                "FLOAT",
+                {"default": 30.0, "min": 1.0, "max": 100, "step": 0.1},
+            ),
+            "steps": ("INT", {"default": 50, "min": 15, "max": 50}),
+            "prompt_upsampling": ("BOOLEAN", {"default": False}),
+            "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
+            "output_format": ("STRING", {"default": "jpeg"}),
+        },
+    }
+
+    def call(self, *args, **kwargs):
+        if "control_image" in kwargs:
+            kwargs["control_image"] = self._convert_image_to_base64(
+                kwargs["control_image"]
+            )
+        return super().call(*args, **kwargs)
+
+
+class FluxProDepthFinetune(FluxBase):
+    API_ENDPOINT = "v1/flux-pro-1.0-depth-finetuned"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "image/*"
+    CATEGORY = "Flux Finetuned"
+    INPUT_SPEC = {
+        "required": {
+            "prompt": ("STRING", {"multiline": True}),
+            "control_image": ("IMAGE",),
+            "finetune_id": ("STRING", {"multiline": False}),
+        },
+        "optional": {
+            "finetune_strength": ("FLOAT", {"default": 1.1, "min": 0.0, "max": 2.0}),
+            "seed": ("INT", {"default": 0, "min": 0, "max": 4294967294}),
+            "guidance": (
+                "FLOAT",
+                {"default": 15.0, "min": 1.0, "max": 100, "step": 0.1},
+            ),
+            "steps": ("INT", {"default": 50, "min": 15, "max": 50}),
+            "prompt_upsampling": ("BOOLEAN", {"default": False}),
+            "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
+            "output_format": ("STRING", {"default": "jpeg"}),
+        },
+    }
+
+    def call(self, *args, **kwargs):
+        if "control_image" in kwargs:
+            kwargs["control_image"] = self._convert_image_to_base64(
+                kwargs["control_image"]
+            )
+        return super().call(*args, **kwargs)
+
+
+class FluxProFillFinetune(FluxBase):
+    API_ENDPOINT = "v1/flux-pro-1.0-fill-finetuned"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "image/*"
+    INPUT_SPEC = {
+        "required": {
+            "image": ("IMAGE",),
+            "finetune_id": ("STRING", {"multiline": False}),
+            "prompt": ("STRING", {"multiline": True}),
+        },
+        "optional": {
+            "mask": ("MASK",),
+            "seed": ("INT", {"default": 0, "min": 0, "max": 4294967294}),
+            "guidance": (
+                "FLOAT",
+                {"default": 60.0, "min": 1.5, "max": 100, "step": 0.1},
+            ),
+            "steps": ("INT", {"default": 50, "min": 15, "max": 50}),
+            "prompt_upsampling": ("BOOLEAN", {"default": False}),
+            "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
+            "api_key_override": ("STRING", {"multiline": False}),
+        },
+    }
+
+    def call(self, *args, **kwargs):
+        if "image" in kwargs:
+            kwargs["image"] = self._convert_image_to_base64(kwargs["image"])
+        if "mask" in kwargs and kwargs["mask"] is not None:
+            kwargs["mask"] = self._convert_mask_to_base64(kwargs["mask"])
+        return super().call(*args, **kwargs)
+
+
+class FluxUltra11Finetune(FluxBase):
+    API_ENDPOINT = "v1/flux-pro-1.1-ultra-finetuned"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "image/*"
+
+    INPUT_SPEC = {
+        "required": {
+            "prompt": ("STRING", {"multiline": True}),
+            "finetune_id": ("STRING", {"multiline": False}),
+        },
+        "optional": {
+            "finetune_strength": ("FLOAT", {"default": 1.2, "min": 0.0, "max": 2.0}),
+            "image_prompt": ("IMAGE",),
+            "aspect_ratio": ("STRING", {"default": "1:1"}),
+            "raw": (
+                "BOOLEAN",
+                {"default": False, "label_on": "True", "label_off": "False"},
+            ),
+            "safety_tolerance": ("INT", {"default": 5, "min": 1, "max": 5, "step": 1}),
+            "seed": ("INT", {"default": 0, "min": 0, "max": 4294967294}),
+            "image_prompt_strength": (
+                "FLOAT",
+                {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01},
+            ),
+            "output_format": ("STRING", {"default": "png"}),
+            "api_key_override": ("STRING", {"multiline": False}),
+        },
+    }
+
+    def call(self, *args, **kwargs):
+        if "image_prompt" in kwargs and kwargs["image_prompt"] is not None:
+            kwargs["image_prompt"] = self._convert_image_to_base64(
+                kwargs["image_prompt"]
+            )
+        return super().call(*args, **kwargs)
