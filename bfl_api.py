@@ -10,6 +10,7 @@ from requests.models import PreparedRequest
 import base64
 
 ROOT_API = "https://api.bfl.ml/"
+US1_API = "https://api.us1.bfl.ai/"
 API_KEY = os.environ.get("BFL_API_KEY")
 
 
@@ -37,14 +38,18 @@ class FluxBase:
 
     @classmethod
     def INPUT_TYPES(cls):
-        return cls.INPUT_SPEC
+        base_inputs = cls.INPUT_SPEC.copy()
+        if "optional" not in base_inputs:
+            base_inputs["optional"] = {}
+        base_inputs["optional"]["region"] = (["EU1", "US1"], {"default": "EU1"})
+        return base_inputs
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "call"
     CATEGORY = "Flux"
 
     def call(self, *args, **kwargs):
-        data = {k: v for k, v in kwargs.items()}
+        data = {k: v for k, v in kwargs.items() if k != "region"}
         headers = {
             "Accept": self.ACCEPT,
             "x-key": kwargs.get("api_key_override") or get_api_key(),
@@ -53,18 +58,21 @@ class FluxBase:
             raise Exception(
                 "No Black Forest Labs API key set. Set environment variable BFL_API_KEY, insert key into bfl_api_key.txt, or through node field 'api_key_override'"
             )
-        response = self._make_request(headers, data, files=None)
+        response = self._make_request(
+            headers, data, files=None, region=kwargs.get("region", "EU1")
+        )
 
         if response.status_code == 200:
-            return self._handle_response(response, headers)
+            return self._handle_response(response, headers, kwargs.get("region", "EU1"))
         else:
             error_info = response.json()
             raise Exception(f"BFL API Message: {error_info}")
 
-    def _make_request(self, headers, data, files):
+    def _make_request(self, headers, data, files, region):
         req = PreparedRequest()
         req.prepare_method("POST")
-        req.prepare_url(f"{ROOT_API}{self.API_ENDPOINT}", None)
+        base_url = US1_API if region == "US1" else ROOT_API
+        req.prepare_url(f"{base_url}{self.API_ENDPOINT}", None)
         req.prepare_headers(headers)
         if files:
             req.prepare_body(data=data, files=files)
@@ -72,19 +80,20 @@ class FluxBase:
             req.prepare_body(data=None, files=None, json=data)
         return requests.Session().send(req)
 
-    def _handle_response(self, response, headers):
+    def _handle_response(self, response, headers, region="EU1"):
         if self.POLL_ENDPOINT:
-            return self._poll_for_result(response.json().get("id"), headers)
+            return self._poll_for_result(response.json().get("id"), headers, region)
         else:
             return self._process_image_response(response)
 
-    def _poll_for_result(self, id, headers):
+    def _poll_for_result(self, id, headers, region="EU1"):
         timeout, start_time = 240, time.time()
         retries = 0
         max_retries = 0
+        base_url = US1_API if region == "US1" else ROOT_API
         while True:
             response = requests.get(
-                f"{ROOT_API}{self.POLL_ENDPOINT}", params={"id": id}, headers=headers
+                f"{base_url}{self.POLL_ENDPOINT}", params={"id": id}, headers=headers
             )
             if response.status_code == 200:
                 result = response.json()
