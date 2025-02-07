@@ -308,6 +308,8 @@ class FluxCanny(FluxBase):
                 {"default": 30.0, "min": 1.0, "max": 100, "step": 0.1},
             ),
             "steps": ("INT", {"default": 50, "min": 15, "max": 50}),
+            "low_threshold": ("INT", {"default": 50, "min": 0, "max": 500}),
+            "high_threshold": ("INT", {"default": 200, "min": 0, "max": 500}),
             "prompt_upsampling": ("BOOLEAN", {"default": False}),
             "safety_tolerance": ("INT", {"default": 2, "min": 0, "max": 6}),
             "api_key_override": ("STRING", {"multiline": False}),
@@ -319,6 +321,10 @@ class FluxCanny(FluxBase):
             kwargs["control_image"] = self._convert_image_to_base64(
                 kwargs["control_image"]
             )
+        if "low_threshold" in kwargs:
+            kwargs["canny_low_threshold"] = int(kwargs.pop("low_threshold"))
+        if "high_threshold" in kwargs:
+            kwargs["canny_high_threshold"] = int(kwargs.pop("high_threshold"))
         return super().call(*args, **kwargs)
 
 
